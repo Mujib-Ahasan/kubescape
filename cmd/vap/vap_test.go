@@ -168,17 +168,14 @@ func TestDeployLibrary(t *testing.T) {
 		}
 		defer func() { http.DefaultTransport = origTransport }()
 
-		// Capture stdout
-		out := captureStdout(t, func() {
-			err := deployLibrary()
-			require.NoError(t, err)
-		})
+		content, err := deployLibrary()
+		require.NoError(t, err)
 
-		parts := strings.Split(out, "---\n")
+		parts := strings.Split(content, "\n---\n")
 		require.Len(t, parts, 3)
-		assert.Equal(t, "policy-config-content\n", parts[0])
-		assert.Equal(t, "basic-control-content\n", parts[1])
-		assert.Equal(t, "kubescape-policies-content\n", parts[2])
+		assert.Contains(t, parts[0], "policy-config-content")
+		assert.Contains(t, parts[1], "basic-control-content")
+		assert.Contains(t, parts[2], "kubescape-policies-content")
 	})
 
 	t.Run("first download fails", func(t *testing.T) {
@@ -198,7 +195,7 @@ func TestDeployLibrary(t *testing.T) {
 		}
 		defer func() { http.DefaultTransport = origTransport }()
 
-		err := deployLibrary()
+		_, err := deployLibrary()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to download file")
 	})
@@ -220,7 +217,7 @@ func TestDeployLibrary(t *testing.T) {
 		}
 		defer func() { http.DefaultTransport = origTransport }()
 
-		err := deployLibrary()
+		_, err := deployLibrary()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to download file")
 	})
@@ -242,7 +239,7 @@ func TestDeployLibrary(t *testing.T) {
 		}
 		defer func() { http.DefaultTransport = origTransport }()
 
-		err := deployLibrary()
+		_, err := deployLibrary()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to download file")
 	})
@@ -250,13 +247,11 @@ func TestDeployLibrary(t *testing.T) {
 
 func TestCreatePolicyBinding(t *testing.T) {
 	t.Run("minimal binding with name and policy", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Deny", "", nil, nil)
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Deny", "", nil, nil)
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		assert.Equal(t, "admissionregistration.k8s.io/v1", binding.APIVersion)
 		assert.Equal(t, "ValidatingAdmissionPolicyBinding", binding.Kind)
@@ -269,13 +264,11 @@ func TestCreatePolicyBinding(t *testing.T) {
 	})
 
 	t.Run("with namespaces", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Audit", "", []string{"ns1", "ns2"}, nil)
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Audit", "", []string{"ns1", "ns2"}, nil)
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		require.NotNil(t, binding.Spec.MatchResources.NamespaceSelector)
 		require.Len(t, binding.Spec.MatchResources.NamespaceSelector.MatchExpressions, 1)
@@ -285,13 +278,11 @@ func TestCreatePolicyBinding(t *testing.T) {
 	})
 
 	t.Run("with labels", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Warn", "", nil, []string{"app=nginx", "env=prod"})
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Warn", "", nil, []string{"app=nginx", "env=prod"})
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		require.NotNil(t, binding.Spec.MatchResources.ObjectSelector)
 		assert.Equal(t, map[string]string{"app": "nginx", "env": "prod"}, binding.Spec.MatchResources.ObjectSelector.MatchLabels)
@@ -299,13 +290,11 @@ func TestCreatePolicyBinding(t *testing.T) {
 	})
 
 	t.Run("with parameter reference", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Deny", "my-params", nil, nil)
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Deny", "my-params", nil, nil)
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		require.NotNil(t, binding.Spec.ParamRef)
 		assert.Equal(t, "my-params", binding.Spec.ParamRef.Name)
@@ -314,13 +303,11 @@ func TestCreatePolicyBinding(t *testing.T) {
 	})
 
 	t.Run("all fields combined", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Deny", "my-params", []string{"ns1"}, []string{"app=nginx"})
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Deny", "my-params", []string{"ns1"}, []string{"app=nginx"})
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		assert.Equal(t, "my-binding", binding.Name)
 		assert.Equal(t, "c-0016", binding.Spec.PolicyName)
@@ -330,25 +317,21 @@ func TestCreatePolicyBinding(t *testing.T) {
 	})
 
 	t.Run("empty namespace slice does not add selector", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Deny", "", []string{}, nil)
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Deny", "", []string{}, nil)
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		assert.Nil(t, binding.Spec.MatchResources.NamespaceSelector)
 	})
 
 	t.Run("empty label slice does not add selector", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := createPolicyBinding("my-binding", "c-0016", "Deny", "", nil, []string{})
-			require.NoError(t, err)
-		})
+		out, err := createPolicyBinding("my-binding", "c-0016", "Deny", "", nil, []string{})
+		require.NoError(t, err)
 
 		var binding admissionv1.ValidatingAdmissionPolicyBinding
-		err := yaml.Unmarshal([]byte(out), &binding)
+		err = yaml.Unmarshal([]byte(out), &binding)
 		require.NoError(t, err)
 		assert.Nil(t, binding.Spec.MatchResources.ObjectSelector)
 	})
@@ -586,4 +569,65 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = oldStdout
 
 	return <-outC
+}
+
+func TestWriteOutput(t *testing.T) {
+	dir := t.TempDir()
+	filePath := dir + "/output.yaml"
+
+		t.Run("writes to file when path provided", func(t *testing.T) {
+		err := writeOutput("test content", filePath)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, "test content", string(data))
+	})
+
+	t.Run("writes to stdout when path is empty", func(t *testing.T) {
+		out := captureStdout(t, func() {
+			err := writeOutput("stdout content", "")
+			require.NoError(t, err)
+		})
+		assert.Equal(t, "stdout content", out)
+	})
+}
+
+func TestDeployLibraryCmdOutputFlag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer server.Close()
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = &redirectTransport{
+		baseURL:           strings.TrimPrefix(server.URL, "http://"),
+		originalTransport: server.Client().Transport,
+	}
+	defer func() { http.DefaultTransport = origTransport }()
+
+	dir := t.TempDir()
+	outPath := dir + "/policies.yaml"
+	cmd := getDeployLibraryCmd()
+	cmd.SetArgs([]string{"--output", outPath})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "ok")
+}
+
+func TestCreatePolicyBindingCmdOutputFlag(t *testing.T) {
+	dir := t.TempDir()
+	outPath := dir + "/binding.yaml"
+	cmd := getCreatePolicyBindingCmd()
+	cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--output", outPath})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "my-binding")
+	assert.Contains(t, string(data), "ValidatingAdmissionPolicyBinding")
 }
