@@ -260,14 +260,34 @@ func listFilesOrDirectories(pattern string, onlyDirectories bool) ([]string, []e
 }
 
 func readYamlFile(yamlFile []byte) ([]workloadinterface.IMetadata, error) {
-	defer recover()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.L().Warning(fmt.Sprintf("panic during YAML parsing: %v", r))
+		}
+	}()
 
-	r := bytes.NewReader(yamlFile)
-	dec := yaml.NewDecoder(r)
 	yamlObjs := []workloadinterface.IMetadata{}
 
-	var t interface{}
-	for dec.Decode(&t) == nil {
+	// Split into individual documents before parsing.
+	// yaml.v3's streaming decoder does not advance past parse errors —
+	// calling Decode again after an error loops on the same position indefinitely.
+	// Splitting by the document separator and using yaml.Unmarshal per document
+	// gives us clean per-document error isolation.
+	normalized := yamlFile
+	if bytes.HasPrefix(normalized, []byte("---")) {
+		normalized = normalized[3:]
+	}
+
+	for _, doc := range bytes.Split(normalized, []byte("\n---")) {
+		doc = bytes.TrimSpace(doc)
+		if len(doc) == 0 {
+			continue
+		}
+		var t interface{}
+		if err := yaml.Unmarshal(doc, &t); err != nil {
+			logger.L().Warning(fmt.Sprintf("skipping malformed YAML document: %v", err))
+			continue
+		}
 		j := convertYamlToJson(t)
 		if j == nil {
 			continue
