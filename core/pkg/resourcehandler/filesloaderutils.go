@@ -14,14 +14,14 @@ func addWorkloadsToResourcesMap(allResources map[string][]workloadinterface.IMet
 	for i := range workloads {
 		groupVersionResource, err := k8sinterface.GetGroupVersionResource(workloads[i].GetKind())
 		if err != nil {
-			// TODO - print warning
+			logger.L().Warning("failed to get GroupVersionResource for workload", helpers.String("kind", workloads[i].GetKind()), helpers.Error(err))
 			continue
 		}
 
 		if k8sinterface.IsTypeWorkload(workloads[i].GetObject()) {
 			w := workloadinterface.NewWorkloadObj(workloads[i].GetObject())
 			if groupVersionResource.Group != w.GetGroup() || groupVersionResource.Version != w.GetVersion() {
-				// TODO - print warning
+				logger.L().Warning("workload GroupVersion mismatch", helpers.String("kind", workloads[i].GetKind()), helpers.String("expectedGroup", groupVersionResource.Group), helpers.String("actualGroup", w.GetGroup()), helpers.String("expectedVersion", groupVersionResource.Version), helpers.String("actualVersion", w.GetVersion()))
 				continue
 			}
 		}
