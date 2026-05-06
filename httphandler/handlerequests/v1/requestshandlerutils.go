@@ -120,8 +120,8 @@ func readResultsFile(fileID string) (*reporthandlingv2.PostureReport, error) {
 }
 
 func removeResultDirs() {
-	os.ReadDir(OutputDir)
-	os.ReadDir(FailedOutputDir)
+	os.RemoveAll(OutputDir)
+	os.RemoveAll(FailedOutputDir)
 }
 func removeResultsFile(fileID string) error {
 	if fileName := searchFile(fileID); fileName != "" {
