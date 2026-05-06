@@ -299,11 +299,12 @@ func splitYAMLDocuments(data []byte) [][]byte {
 	var current bytes.Buffer
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), len(data)+1)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if isYAMLDocumentSeparator(line) {
 			if doc := bytes.TrimSpace(current.Bytes()); len(doc) > 0 {
-			docs = append(docs, append([]byte{}, doc...))
+				docs = append(docs, append([]byte{}, doc...))
 			}
 			current.Reset()
 			continue
@@ -311,8 +312,11 @@ func splitYAMLDocuments(data []byte) [][]byte {
 		current.Write(line)
 		current.WriteByte('\n')
 	}
+	if err := scanner.Err(); err != nil {
+		logger.L().Warning(fmt.Sprintf("error scanning YAML input: %v", err))
+	}
 	if doc := bytes.TrimSpace(current.Bytes()); len(doc) > 0 {
-	docs = append(docs, append([]byte{}, doc...))
+		docs = append(docs, append([]byte{}, doc...))
 	}
 	return docs
 }
