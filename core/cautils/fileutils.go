@@ -1,6 +1,7 @@
 package cautils
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -267,16 +268,7 @@ func readYamlFile(yamlFile []byte) (yamlObjs []workloadinterface.IMetadata, _ er
 		}
 	}()
 
-	normalized := bytes.TrimPrefix(yamlFile, []byte("---\n"))
-	if len(normalized) > 0 && normalized[len(normalized)-1] != '\n' {
-		normalized = append(normalized, '\n')
-	}
-
-	for i, doc := range bytes.Split(normalized, []byte("\n---\n")) {
-		doc = bytes.TrimSpace(doc)
-		if len(doc) == 0 {
-			continue
-		}
+	for i, doc := range splitYAMLDocuments(yamlFile) {
 		var t interface{}
 		if err := yaml.Unmarshal(doc, &t); err != nil {
 			logger.L().Warning(fmt.Sprintf("skipping malformed YAML document %d: %v", i+1, err))
@@ -300,6 +292,38 @@ func readYamlFile(yamlFile []byte) (yamlObjs []workloadinterface.IMetadata, _ er
 	}
 
 	return
+}
+
+func splitYAMLDocuments(data []byte) [][]byte {
+	var docs [][]byte
+	var current bytes.Buffer
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if isYAMLDocumentSeparator(line) {
+			if doc := bytes.TrimSpace(current.Bytes()); len(doc) > 0 {
+			docs = append(docs, append([]byte{}, doc...))
+			}
+			current.Reset()
+			continue
+		}
+		current.Write(line)
+		current.WriteByte('\n')
+	}
+	if doc := bytes.TrimSpace(current.Bytes()); len(doc) > 0 {
+	docs = append(docs, append([]byte{}, doc...))
+	}
+	return docs
+}
+
+func isYAMLDocumentSeparator(line []byte) bool {
+	line = bytes.TrimRight(line, "\r")
+	if !bytes.HasPrefix(line, []byte("---")) {
+		return false
+	}
+	rest := bytes.TrimLeft(line[3:], " \t")
+	return len(rest) == 0 || rest[0] == '#'
 }
 
 func readJsonFile(jsonFile []byte) ([]workloadinterface.IMetadata, error) {
