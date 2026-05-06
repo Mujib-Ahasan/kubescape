@@ -209,6 +209,10 @@ func (handler *HTTPHandler) Results(w http.ResponseWriter, r *http.Request) {
 		logger.L().Info("deleting results", helpers.String("ID", resultsQueryParams.ScanID))
 
 		if resultsQueryParams.AllResults {
+			if handler.state.len() > 0 {
+				handler.writeError(w, fmt.Errorf("cannot delete all results while a scan is in progress"), resultsQueryParams.ScanID)
+				return
+			}
 			removeResultDirs()
 		} else {
 			removeResultsFile(resultsQueryParams.ScanID)
