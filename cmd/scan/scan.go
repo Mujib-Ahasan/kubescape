@@ -40,7 +40,7 @@ func GetScanCommand(ks meta.IKubescape) *cobra.Command {
 	scanCmd := &cobra.Command{
 		Use:     "scan",
 		Short:   "Scan a Kubernetes cluster or YAML files for image vulnerabilities and misconfigurations",
-		Long:    `Scan a Kubernetes cluster, YAML files, Helm charts, or container images for security misconfigurations and vulnerabilities.`,
+		Long:    `Scan a Kubernetes cluster, YAML files, Helm charts, Kustomize directories, Git repositories, or container images for security misconfigurations and vulnerabilities.`,
 		Example: scanCmdExamples,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if scanInfo.FailThresholdSeverity != "" {
