@@ -10,6 +10,7 @@ import (
 	"github.com/kubescape/opa-utils/reporthandling/apis"
 	"github.com/kubescape/opa-utils/reporthandling/results/v1/reportsummary"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -548,6 +549,11 @@ func TestIsEmptyResources(t *testing.T) {
 			want:     false,
 		},
 		{
+			name:     "one excluded — empty (excluded does not count as a result)",
+			counters: mockCounters{excluded: 1},
+			want:     true,
+		},
+		{
 			name:     "mixed non-zero — not empty",
 			counters: mockCounters{failed: 2, passed: 3, skipped: 1},
 			want:     false,
@@ -561,8 +567,9 @@ func TestIsEmptyResources(t *testing.T) {
 }
 
 func TestIsLargeCluster(t *testing.T) {
-	// Reset the global so the default threshold (2500) is used
-	largeClusterSize = -1
+	orig := largeClusterSize
+	t.Cleanup(func() { largeClusterSize = orig })
+	t.Setenv("LARGE_CLUSTER_SIZE", "2500")
 
 	tests := []struct {
 		name        string
@@ -597,20 +604,32 @@ func TestIsLargeCluster(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			largeClusterSize = -1 // reset before each sub-test
+			largeClusterSize = -1
 			assert.Equal(t, tt.want, isLargeCluster(tt.clusterSize))
 		})
 	}
 }
 
 func TestGetNamespaceName(t *testing.T) {
+	orig := largeClusterSize
+	t.Cleanup(func() { largeClusterSize = orig })
+	t.Setenv("LARGE_CLUSTER_SIZE", "2500")
+
 	podJSON := `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"mypod","namespace":"mynamespace"}}`
 	namespaceJSON := `{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"mynamespace"}}`
 	nodeJSON := `{"apiVersion":"v1","kind":"Node","metadata":{"name":"mynode"}}`
 
-	pod, _ := workloadinterface.NewWorkload([]byte(podJSON))
-	ns, _ := workloadinterface.NewWorkload([]byte(namespaceJSON))
-	node, _ := workloadinterface.NewWorkload([]byte(nodeJSON))
+	pod, err := workloadinterface.NewWorkload([]byte(podJSON))
+	require.NoError(t, err)
+	require.NotNil(t, pod)
+
+	ns, err := workloadinterface.NewWorkload([]byte(namespaceJSON))
+	require.NoError(t, err)
+	require.NotNil(t, ns)
+
+	node, err := workloadinterface.NewWorkload([]byte(nodeJSON))
+	require.NoError(t, err)
+	require.NotNil(t, node)
 
 	tests := []struct {
 		name        string
