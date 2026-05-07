@@ -509,3 +509,144 @@ func TestApplyExceptionsToManualControls(t *testing.T) {
 		assert.Equal(t, apis.StatusSkipped, ctrl.GetStatus().Status())
 	})
 }
+
+// mockCounters implements reportsummary.ICounters for testing
+type mockCounters struct {
+	failed, skipped, passed, excluded int
+}
+
+func (m mockCounters) Failed() int   { return m.failed }
+func (m mockCounters) Skipped() int  { return m.skipped }
+func (m mockCounters) Passed() int   { return m.passed }
+func (m mockCounters) Excluded() int { return m.excluded }
+func (m mockCounters) All() int      { return m.failed + m.skipped + m.passed + m.excluded }
+
+func TestIsEmptyResources(t *testing.T) {
+	tests := []struct {
+		name     string
+		counters mockCounters
+		want     bool
+	}{
+		{
+			name:     "all zero — empty",
+			counters: mockCounters{},
+			want:     true,
+		},
+		{
+			name:     "one failed — not empty",
+			counters: mockCounters{failed: 1},
+			want:     false,
+		},
+		{
+			name:     "one passed — not empty",
+			counters: mockCounters{passed: 1},
+			want:     false,
+		},
+		{
+			name:     "one skipped — not empty",
+			counters: mockCounters{skipped: 1},
+			want:     false,
+		},
+		{
+			name:     "mixed non-zero — not empty",
+			counters: mockCounters{failed: 2, passed: 3, skipped: 1},
+			want:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isEmptyResources(tt.counters))
+		})
+	}
+}
+
+func TestIsLargeCluster(t *testing.T) {
+	// Reset the global so the default threshold (2500) is used
+	largeClusterSize = -1
+
+	tests := []struct {
+		name        string
+		clusterSize int
+		want        bool
+	}{
+		{
+			name:        "zero nodes — not large",
+			clusterSize: 0,
+			want:        false,
+		},
+		{
+			name:        "below threshold — not large",
+			clusterSize: 100,
+			want:        false,
+		},
+		{
+			name:        "at threshold — not large (exclusive)",
+			clusterSize: 2500,
+			want:        false,
+		},
+		{
+			name:        "above threshold — large",
+			clusterSize: 2501,
+			want:        true,
+		},
+		{
+			name:        "well above threshold — large",
+			clusterSize: 10000,
+			want:        true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			largeClusterSize = -1 // reset before each sub-test
+			assert.Equal(t, tt.want, isLargeCluster(tt.clusterSize))
+		})
+	}
+}
+
+func TestGetNamespaceName(t *testing.T) {
+	podJSON := `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"mypod","namespace":"mynamespace"}}`
+	namespaceJSON := `{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"mynamespace"}}`
+	nodeJSON := `{"apiVersion":"v1","kind":"Node","metadata":{"name":"mynode"}}`
+
+	pod, _ := workloadinterface.NewWorkload([]byte(podJSON))
+	ns, _ := workloadinterface.NewWorkload([]byte(namespaceJSON))
+	node, _ := workloadinterface.NewWorkload([]byte(nodeJSON))
+
+	tests := []struct {
+		name        string
+		obj         workloadinterface.IMetadata
+		clusterSize int
+		want        string
+	}{
+		{
+			name:        "small cluster — always clusterScope",
+			obj:         pod,
+			clusterSize: 10,
+			want:        clusterScope,
+		},
+		{
+			name:        "large cluster — namespaced resource returns namespace",
+			obj:         pod,
+			clusterSize: 3000,
+			want:        "mynamespace",
+		},
+		{
+			name:        "large cluster — Namespace kind returns its name",
+			obj:         ns,
+			clusterSize: 3000,
+			want:        "mynamespace",
+		},
+		{
+			name:        "large cluster — cluster-scoped resource returns clusterScope",
+			obj:         node,
+			clusterSize: 3000,
+			want:        clusterScope,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			largeClusterSize = -1
+			assert.Equal(t, tt.want, getNamespaceName(tt.obj, tt.clusterSize))
+		})
+	}
+}
