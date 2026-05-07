@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 
@@ -46,8 +45,6 @@ func GetVapHelperCmd() *cobra.Command {
 }
 
 func getDeployLibraryCmd() *cobra.Command {
-	var outputFile string
-
 	cmd := &cobra.Command{
 		Use:   "deploy-library",
 		Short: "Install Kubescape CEL admission policy library",
@@ -57,10 +54,10 @@ func getDeployLibraryCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(content, outputFile)
+			fmt.Print(content)
+			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "Write output to file instead of stdout")
 
 	return cmd
 }
@@ -72,7 +69,6 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 	var labelArr []string
 	var action string
 	var parameterReference string
-	var outputFile string
 
 	createPolicyBindingCmd := &cobra.Command{
 		Use:   "create-policy-binding",
@@ -110,7 +106,8 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(content, outputFile)
+			fmt.Print(content)
+			return nil
 		},
 	}
 	// Must specify the name of the policy binding
@@ -122,7 +119,6 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 	createPolicyBindingCmd.Flags().StringSliceVar(&labelArr, "label", []string{}, "Resource label selector")
 	createPolicyBindingCmd.Flags().StringVarP(&action, "action", "a", "Deny", "Action to take when policy fails")
 	createPolicyBindingCmd.Flags().StringVarP(&parameterReference, "parameter-reference", "r", "", "Parameter reference object name")
-	createPolicyBindingCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Write output to file instead of stdout")
 
 	return createPolicyBindingCmd
 }
@@ -188,14 +184,6 @@ func downloadFileToString(url string) (string, error) {
 	// Convert the byte slice to a string
 	bodyString := string(bodyBytes)
 	return bodyString, nil
-}
-
-func writeOutput(content string, outputFile string) error {
-	if outputFile != "" {
-		return os.WriteFile(outputFile, []byte(content), 0644)
-	}
-	fmt.Print(content)
-	return nil
 }
 
 func isValidK8sObjectName(name string) error {

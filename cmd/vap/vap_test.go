@@ -2,10 +2,8 @@ package vap
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -444,60 +442,25 @@ func TestGetVapHelperCmd(t *testing.T) {
 }
 
 func TestLabelSelectorRegexEdgeCases(t *testing.T) {
-	// The label selector regex in createPolicyBindingCmd is: ^[a-zA-Z0-9]+=[a-zA-Z0-9]+$
-	// This is validated in the RunE function, not in a separate function.
-	// We test it through the validation logic.
+	validLabels := []string{"app=nginx", "env1=prod2", "App=Value", "appName=NginxValue"}
+	invalidLabels := []string{"key value", "key=", "=value", "key=val=extra", "app-name=nginx", "app.name=nginx", "app_name=nginx", "app@=nginx", "app=nginx@"}
 
-	tests := []struct {
-		name      string
-		input     string
-		wantValid bool
-	}{
-		{name: "simple key=val", input: "app=nginx", wantValid: true},
-		{name: "key and val with digits", input: "env1=prod2", wantValid: true},
-		{name: "uppercase allowed", input: "App=Value", wantValid: true},
-		{name: "mixed case", input: "appName=NginxValue", wantValid: true},
-		{name: "missing equals (space)", input: "key value", wantValid: false},
-		{name: "missing value", input: "key=", wantValid: false},
-		{name: "missing key", input: "=value", wantValid: false},
-		{name: "multiple equals", input: "key=val=extra", wantValid: false},
-		{name: "empty string", input: "", wantValid: false},
-		{name: "contains hyphen", input: "app-name=nginx", wantValid: false},
-		{name: "contains dot", input: "app.name=nginx", wantValid: false},
-		{name: "contains underscore", input: "app_name=nginx", wantValid: false},
-		{name: "contains special char in key", input: "app@=nginx", wantValid: false},
-		{name: "contains special char in value", input: "app=nginx@", wantValid: false},
+	for _, label := range validLabels {
+		t.Run("valid label "+label, func(t *testing.T) {
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--label", label})
+			err := cmd.Execute()
+			assert.NoError(t, err)
+		})
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Replicate the label validation from createPolicyBindingCmd RunE
-			parts := strings.SplitN(tt.input, "=", 2)
-			valid := false
-			if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
-				// Check that both key and value match [a-zA-Z0-9]+
-				keyMatch := len(parts[0]) > 0
-				valueMatch := len(parts[1]) > 0
-				for _, c := range parts[0] {
-					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-						keyMatch = false
-						break
-					}
-				}
-				for _, c := range parts[1] {
-					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-						valueMatch = false
-						break
-					}
-				}
-				valid = keyMatch && valueMatch
-			}
-
-			if tt.wantValid {
-				assert.True(t, valid, "expected valid label selector: %s", tt.input)
-			} else {
-				assert.False(t, valid, "expected invalid label selector: %s", tt.input)
-			}
+	for _, label := range invalidLabels {
+		t.Run("invalid label "+label, func(t *testing.T) {
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--label", label})
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid label selector")
 		})
 	}
 }
@@ -508,23 +471,20 @@ func TestCreatePolicyBindingCmdAllActions(t *testing.T) {
 
 	for _, action := range validActions {
 		t.Run("valid action "+action, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			cmd.Flags().String("action", "Deny", "")
-			cmd.Flags().Set("action", action)
-			got, _ := cmd.Flags().GetString("action")
-			isValid := got == "Deny" || got == "Audit" || got == "Warn"
-			assert.True(t, isValid)
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--action", action})
+			err := cmd.Execute()
+			assert.NoError(t, err)
 		})
 	}
 
 	for _, action := range invalidActions {
 		t.Run("invalid action "+action, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			cmd.Flags().String("action", "Deny", "")
-			cmd.Flags().Set("action", action)
-			got, _ := cmd.Flags().GetString("action")
-			isValid := got == "Deny" || got == "Audit" || got == "Warn"
-			assert.False(t, isValid)
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--action", action})
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid action")
 		})
 	}
 }
@@ -545,89 +505,4 @@ func TestCreatePolicyBindingCmdRequiredFlags(t *testing.T) {
 	require.NotNil(t, annotations)
 	_, isRequired = annotations[cobra.BashCompOneRequiredFlag]
 	assert.True(t, isRequired, "policy flag should be marked as required")
-}
-
-// captureStdout captures stdout output from a function and returns it as a string.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	os.Stdout = w
-
-	outC := make(chan string)
-	go func() {
-		var buf strings.Builder
-		_, _ = io.Copy(&buf, r)
-		outC <- buf.String()
-	}()
-
-	fn()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	return <-outC
-}
-
-func TestWriteOutput(t *testing.T) {
-	dir := t.TempDir()
-	filePath := dir + "/output.yaml"
-
-		t.Run("writes to file when path provided", func(t *testing.T) {
-		err := writeOutput("test content", filePath)
-		require.NoError(t, err)
-
-		data, err := os.ReadFile(filePath)
-		require.NoError(t, err)
-		assert.Equal(t, "test content", string(data))
-	})
-
-	t.Run("writes to stdout when path is empty", func(t *testing.T) {
-		out := captureStdout(t, func() {
-			err := writeOutput("stdout content", "")
-			require.NoError(t, err)
-		})
-		assert.Equal(t, "stdout content", out)
-	})
-}
-
-func TestDeployLibraryCmdOutputFlag(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "ok")
-	}))
-	defer server.Close()
-
-	origTransport := http.DefaultTransport
-	http.DefaultTransport = &redirectTransport{
-		baseURL:           strings.TrimPrefix(server.URL, "http://"),
-		originalTransport: server.Client().Transport,
-	}
-	defer func() { http.DefaultTransport = origTransport }()
-
-	dir := t.TempDir()
-	outPath := dir + "/policies.yaml"
-	cmd := getDeployLibraryCmd()
-	cmd.SetArgs([]string{"--output", outPath})
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(outPath)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "ok")
-}
-
-func TestCreatePolicyBindingCmdOutputFlag(t *testing.T) {
-	dir := t.TempDir()
-	outPath := dir + "/binding.yaml"
-	cmd := getCreatePolicyBindingCmd()
-	cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--output", outPath})
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(outPath)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "my-binding")
-	assert.Contains(t, string(data), "ValidatingAdmissionPolicyBinding")
 }
