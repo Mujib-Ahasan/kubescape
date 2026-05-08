@@ -1,12 +1,10 @@
 package vap
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 )
 
@@ -212,32 +211,15 @@ func writeOutput(content string, outputFile string) error {
 }
 
 func isValidK8sObjectName(name string) error {
-	if len(name) > 253 {
-		return errors.New("name should be less than 253 characters")
+	if errs := validation.IsDNS1123Subdomain(name); len(errs) > 0 {
+		return fmt.Errorf("invalid name: %s", strings.Join(errs, "; "))
 	}
-	if len(name) == 0 {
-		return errors.New("name should not be empty")
-	}
-	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
-		return errors.New("name should not start or end with '.'")
-	}
-
-	if !regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`).MatchString(name) {
-		return errors.New("name should consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character")
-	}
-
 	return nil
 }
 
 func isValidNamespace(name string) error {
-	if len(name) > 63 {
-		return errors.New("namespace must be at most 63 characters")
-	}
-	if len(name) == 0 {
-		return errors.New("namespace must not be empty")
-	}
-	if !regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`).MatchString(name) {
-		return errors.New("namespace must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character")
+	if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
+		return fmt.Errorf("invalid namespace: %s", strings.Join(errs, "; "))
 	}
 	return nil
 }

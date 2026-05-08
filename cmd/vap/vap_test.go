@@ -37,26 +37,26 @@ func TestIsValidK8sObjectName(t *testing.T) {
 		{name: "1 char", input: "x", wantErr: false},
 
 		// invalid - length
-		{name: "empty string", input: "", wantErr: true, errMsg: "should not be empty"},
-		{name: "exceeds 253 chars", input: strings.Repeat("a", 254), wantErr: true, errMsg: "less than 253 characters"},
+		{name: "empty string", input: "", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "exceeds 253 chars", input: strings.Repeat("a", 254), wantErr: true, errMsg: "no more than 253"},
 
 		// invalid - starts/ends with dot or hyphen
-		{name: "starts with hyphen", input: "-abc", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "ends with hyphen", input: "abc-", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "starts with dot", input: ".abc", wantErr: true, errMsg: "should not start or end with '.'"},
-		{name: "ends with dot", input: "abc.", wantErr: true, errMsg: "should not start or end with '.'"},
+		{name: "starts with hyphen", input: "-abc", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "ends with hyphen", input: "abc-", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "starts with dot", input: ".abc", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "ends with dot", input: "abc.", wantErr: true, errMsg: "RFC 1123 subdomain"},
 
 		// invalid - uppercase
-		{name: "contains uppercase", input: "Abc", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "all uppercase", input: "ABC", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
+		{name: "contains uppercase", input: "Abc", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "all uppercase", input: "ABC", wantErr: true, errMsg: "RFC 1123 subdomain"},
 
 		// invalid - special characters
-		{name: "contains underscore", input: "abc_def", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "contains space", input: "abc def", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "contains at sign", input: "a@b", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
+		{name: "contains underscore", input: "abc_def", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "contains space", input: "abc def", wantErr: true, errMsg: "RFC 1123 subdomain"},
+		{name: "contains at sign", input: "a@b", wantErr: true, errMsg: "RFC 1123 subdomain"},
 
 		// invalid - starts/ends with digit
-		{name: "starts with hyphen and digit", input: "-123abc", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
+		{name: "starts with hyphen and digit", input: "-123abc", wantErr: true, errMsg: "RFC 1123 subdomain"},
 	}
 
 	for _, tt := range tests {
@@ -82,12 +82,12 @@ func TestIsValidNamespace(t *testing.T) {
 		{name: "valid simple", input: "default", wantErr: false},
 		{name: "valid with hyphen", input: "kube-system", wantErr: false},
 		{name: "valid starts with digit", input: "0default", wantErr: false},
-		{name: "empty", input: "", wantErr: true, errMsg: "must not be empty"},
-		{name: "exceeds 63 chars", input: strings.Repeat("a", 64), wantErr: true, errMsg: "at most 63"},
-		{name: "contains dot", input: "team.prod", wantErr: true, errMsg: "must consist of lower case alphanumeric characters or '-'"},
-		{name: "contains uppercase", input: "Default", wantErr: true, errMsg: "must consist of lower case alphanumeric characters or '-'"},
-		{name: "starts with hyphen", input: "-default", wantErr: true, errMsg: "must consist of lower case alphanumeric characters or '-'"},
-		{name: "ends with hyphen", input: "default-", wantErr: true, errMsg: "must consist of lower case alphanumeric characters or '-'"},
+		{name: "empty", input: "", wantErr: true, errMsg: "RFC 1123 label"},
+		{name: "exceeds 63 chars", input: strings.Repeat("a", 64), wantErr: true, errMsg: "no more than 63"},
+		{name: "contains dot", input: "team.prod", wantErr: true, errMsg: "must not contain dots"},
+		{name: "contains uppercase", input: "Default", wantErr: true, errMsg: "RFC 1123 label"},
+		{name: "starts with hyphen", input: "-default", wantErr: true, errMsg: "RFC 1123 label"},
+		{name: "ends with hyphen", input: "default-", wantErr: true, errMsg: "RFC 1123 label"},
 	}
 
 	for _, tt := range tests {
