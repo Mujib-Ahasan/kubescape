@@ -38,10 +38,6 @@ func NewCRDControlInputs() (*CRDControlInputs, error) {
 		return nil, fmt.Errorf("failed to get k8s config")
 	}
 
-	// force GRPC for performance
-	config.AcceptContentTypes = "application/vnd.kubernetes.protobuf"
-	config.ContentType = "application/vnd.kubernetes.protobuf"
-
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)

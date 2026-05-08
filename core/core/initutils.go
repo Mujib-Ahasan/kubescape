@@ -237,8 +237,11 @@ func getConfigInputsGetter(ctx context.Context, ControlsInputs string, accountID
 
 	// Try to read control inputs from the ControlInput CRD in-cluster
 	if crdInputs, err := getter.NewCRDControlInputs(); err == nil {
-		logger.L().Ctx(ctx).Info("using ControlInput CRD for control configuration")
-		return crdInputs
+		if _, crdErr := crdInputs.GetControlsInputs(""); crdErr == nil {
+			logger.L().Ctx(ctx).Info("using ControlInput CRD for control configuration")
+			return crdInputs
+		}
+		logger.L().Ctx(ctx).Debug("ControlInput CRD found but default resource not available, falling back")
 	}
 
 	if downloadReleasedPolicy == nil {
