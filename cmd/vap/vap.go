@@ -96,7 +96,7 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 			}
 			for _, label := range labelArr {
 				// Label selector must be in the format key=value
-				if !regexp.MustCompile(`^[a-zA-Z0-9]+=[a-zA-Z0-9]+$`).MatchString(label) {
+				if !regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?=[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$`).MatchString(label) {
 					return fmt.Errorf("invalid label selector: %s", label)
 				}
 			}
@@ -204,15 +204,17 @@ func writeOutput(content string, outputFile string) error {
 }
 
 func isValidK8sObjectName(name string) error {
-	// Kubernetes object names must consist of lower case alphanumeric characters, '-' or '.',
-	// and must start and end with an alphanumeric character (e.g., 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')
-	// Max length of 63 characters.
-	if len(name) > 63 {
-		return errors.New("name should be less than 63 characters")
+	if len(name) > 253 {
+		return errors.New("name should be less than 253 characters")
+	}
+	if len(name) == 0 {
+		return errors.New("name should not be empty")
+	}
+	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
+		return errors.New("name should not start or end with '.'")
 	}
 
-	regex := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	if !regex.MatchString(name) {
+	if !regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`).MatchString(name) {
 		return errors.New("name should consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character")
 	}
 

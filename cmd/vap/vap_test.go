@@ -31,18 +31,20 @@ func TestIsValidK8sObjectName(t *testing.T) {
 		{name: "starts with digit", input: "123", wantErr: false},
 		{name: "contains multiple hyphens", input: "abc-def-ghi", wantErr: false},
 		{name: "hyphen in middle", input: "abc-def123", wantErr: false},
-		{name: "exactly 63 chars", input: strings.Repeat("a", 63), wantErr: false},
+		{name: "dots in middle", input: "abc.def", wantErr: false},
+		{name: "dots and hyphens mixed", input: "team.prod-v2", wantErr: false},
+		{name: "exactly 253 chars", input: strings.Repeat("a", 253), wantErr: false},
 		{name: "1 char", input: "x", wantErr: false},
 
 		// invalid - length
-		{name: "empty string", input: "", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "exceeds 63 chars", input: strings.Repeat("a", 64), wantErr: true, errMsg: "less than 63 characters"},
+		{name: "empty string", input: "", wantErr: true, errMsg: "should not be empty"},
+		{name: "exceeds 253 chars", input: strings.Repeat("a", 254), wantErr: true, errMsg: "less than 253 characters"},
 
-		// invalid - starts with hyphen
+		// invalid - starts/ends with dot or hyphen
 		{name: "starts with hyphen", input: "-abc", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-
-		// invalid - ends with hyphen
 		{name: "ends with hyphen", input: "abc-", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
+		{name: "starts with dot", input: ".abc", wantErr: true, errMsg: "should not start or end with '.'"},
+		{name: "ends with dot", input: "abc.", wantErr: true, errMsg: "should not start or end with '.'"},
 
 		// invalid - uppercase
 		{name: "contains uppercase", input: "Abc", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
@@ -51,7 +53,6 @@ func TestIsValidK8sObjectName(t *testing.T) {
 		// invalid - special characters
 		{name: "contains underscore", input: "abc_def", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
 		{name: "contains space", input: "abc def", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
-		{name: "contains dot in middle (not allowed by regex)", input: "abc.def", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
 		{name: "contains at sign", input: "a@b", wantErr: true, errMsg: "should consist of lower case alphanumeric characters"},
 
 		// invalid - starts/ends with digit
@@ -454,60 +455,25 @@ func TestGetVapHelperCmd(t *testing.T) {
 }
 
 func TestLabelSelectorRegexEdgeCases(t *testing.T) {
-	// The label selector regex in createPolicyBindingCmd is: ^[a-zA-Z0-9]+=[a-zA-Z0-9]+$
-	// This is validated in the RunE function, not in a separate function.
-	// We test it through the validation logic.
+	validLabels := []string{"app=nginx", "env1=prod2", "App=Value", "appName=NginxValue", "app-name=nginx", "app.name=nginx", "app_name=nginx"}
+	invalidLabels := []string{"key value", "key=", "=value", "key=val=extra", "app@=nginx", "app=nginx@"}
 
-	tests := []struct {
-		name      string
-		input     string
-		wantValid bool
-	}{
-		{name: "simple key=val", input: "app=nginx", wantValid: true},
-		{name: "key and val with digits", input: "env1=prod2", wantValid: true},
-		{name: "uppercase allowed", input: "App=Value", wantValid: true},
-		{name: "mixed case", input: "appName=NginxValue", wantValid: true},
-		{name: "missing equals (space)", input: "key value", wantValid: false},
-		{name: "missing value", input: "key=", wantValid: false},
-		{name: "missing key", input: "=value", wantValid: false},
-		{name: "multiple equals", input: "key=val=extra", wantValid: false},
-		{name: "empty string", input: "", wantValid: false},
-		{name: "contains hyphen", input: "app-name=nginx", wantValid: false},
-		{name: "contains dot", input: "app.name=nginx", wantValid: false},
-		{name: "contains underscore", input: "app_name=nginx", wantValid: false},
-		{name: "contains special char in key", input: "app@=nginx", wantValid: false},
-		{name: "contains special char in value", input: "app=nginx@", wantValid: false},
+	for _, label := range validLabels {
+		t.Run("valid label "+label, func(t *testing.T) {
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--label", label})
+			err := cmd.Execute()
+			assert.NoError(t, err)
+		})
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Replicate the label validation from createPolicyBindingCmd RunE
-			parts := strings.SplitN(tt.input, "=", 2)
-			valid := false
-			if len(parts) == 2 && len(parts[0]) > 0 && len(parts[1]) > 0 {
-				// Check that both key and value match [a-zA-Z0-9]+
-				keyMatch := len(parts[0]) > 0
-				valueMatch := len(parts[1]) > 0
-				for _, c := range parts[0] {
-					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-						keyMatch = false
-						break
-					}
-				}
-				for _, c := range parts[1] {
-					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-						valueMatch = false
-						break
-					}
-				}
-				valid = keyMatch && valueMatch
-			}
-
-			if tt.wantValid {
-				assert.True(t, valid, "expected valid label selector: %s", tt.input)
-			} else {
-				assert.False(t, valid, "expected invalid label selector: %s", tt.input)
-			}
+	for _, label := range invalidLabels {
+		t.Run("invalid label "+label, func(t *testing.T) {
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--label", label})
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid label selector")
 		})
 	}
 }
@@ -518,23 +484,20 @@ func TestCreatePolicyBindingCmdAllActions(t *testing.T) {
 
 	for _, action := range validActions {
 		t.Run("valid action "+action, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			cmd.Flags().String("action", "Deny", "")
-			cmd.Flags().Set("action", action)
-			got, _ := cmd.Flags().GetString("action")
-			isValid := got == "Deny" || got == "Audit" || got == "Warn"
-			assert.True(t, isValid)
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--action", action})
+			err := cmd.Execute()
+			assert.NoError(t, err)
 		})
 	}
 
 	for _, action := range invalidActions {
 		t.Run("invalid action "+action, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			cmd.Flags().String("action", "Deny", "")
-			cmd.Flags().Set("action", action)
-			got, _ := cmd.Flags().GetString("action")
-			isValid := got == "Deny" || got == "Audit" || got == "Warn"
-			assert.False(t, isValid)
+			cmd := getCreatePolicyBindingCmd()
+			cmd.SetArgs([]string{"--name", "my-binding", "--policy", "c-0016", "--action", action})
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid action")
 		})
 	}
 }
