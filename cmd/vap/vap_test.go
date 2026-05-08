@@ -456,7 +456,7 @@ func TestGetVapHelperCmd(t *testing.T) {
 
 func TestLabelSelectorRegexEdgeCases(t *testing.T) {
 	validLabels := []string{"app=nginx", "env1=prod2", "App=Value", "appName=NginxValue", "app-name=nginx", "app.name=nginx", "app_name=nginx", "app.kubernetes.io/name=nginx", "key="}
-	invalidLabels := []string{"key value", "=value", "key=val=extra", "app@=nginx", "app=nginx@", "app!=nginx", "app"}
+	invalidLabels := []string{"key value", "=value", "key=val=extra", "app@=nginx", "app=nginx@", "app!=nginx", "app", "app==nginx"}
 
 	for _, label := range validLabels {
 		t.Run("valid label "+label, func(t *testing.T) {
