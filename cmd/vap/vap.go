@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/kubescape/v3/core/cautils"
@@ -45,19 +47,23 @@ func GetVapHelperCmd() *cobra.Command {
 }
 
 func getDeployLibraryCmd() *cobra.Command {
+	var outputFile string
+	var timeout time.Duration
+
 	cmd := &cobra.Command{
 		Use:   "deploy-library",
 		Short: "Install Kubescape CEL admission policy library",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			content, err := deployLibrary()
+			content, err := deployLibrary(timeout)
 			if err != nil {
 				return err
 			}
-			fmt.Print(content)
-			return nil
+			return writeOutput(content, outputFile)
 		},
 	}
+	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "Write output to file instead of stdout")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "HTTP request timeout per download (e.g. 30s, 1m)")
 
 	return cmd
 }
@@ -69,6 +75,7 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 	var labelArr []string
 	var action string
 	var parameterReference string
+	var outputFile string
 
 	createPolicyBindingCmd := &cobra.Command{
 		Use:   "create-policy-binding",
@@ -106,8 +113,7 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Print(content)
-			return nil
+			return writeOutput(content, outputFile)
 		},
 	}
 	// Must specify the name of the policy binding
@@ -119,31 +125,32 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 	createPolicyBindingCmd.Flags().StringSliceVar(&labelArr, "label", []string{}, "Resource label selector")
 	createPolicyBindingCmd.Flags().StringVarP(&action, "action", "a", "Deny", "Action to take when policy fails")
 	createPolicyBindingCmd.Flags().StringVarP(&parameterReference, "parameter-reference", "r", "", "Parameter reference object name")
+	createPolicyBindingCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Write output to file instead of stdout")
 
 	return createPolicyBindingCmd
 }
 
 // Implementation of the VAP helper commands
 // deploy-library
-func deployLibrary() (string, error) {
+func deployLibrary(timeout time.Duration) (string, error) {
 	logger.L().Info("Downloading the Kubescape CEL admission policy library")
 	// Download the policy-configuration-definition.yaml from the latest release URL
 	policyConfigurationDefinitionURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/policy-configuration-definition.yaml"
-	policyConfigurationDefinition, err := downloadFileToString(policyConfigurationDefinitionURL)
+	policyConfigurationDefinition, err := downloadFileToString(policyConfigurationDefinitionURL, timeout)
 	if err != nil {
 		return "", err
 	}
 
 	// Download the basic-control-configuration.yaml from the latest release URL
 	basicControlConfigurationURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/basic-control-configuration.yaml"
-	basicControlConfiguration, err := downloadFileToString(basicControlConfigurationURL)
+	basicControlConfiguration, err := downloadFileToString(basicControlConfigurationURL, timeout)
 	if err != nil {
 		return "", err
 	}
 
 	// Download the kubescape-validating-admission-policies.yaml from the latest release URL
 	kubescapeValidatingAdmissionPoliciesURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/kubescape-validating-admission-policies.yaml"
-	kubescapeValidatingAdmissionPolicies, err := downloadFileToString(kubescapeValidatingAdmissionPoliciesURL)
+	kubescapeValidatingAdmissionPolicies, err := downloadFileToString(kubescapeValidatingAdmissionPoliciesURL, timeout)
 	if err != nil {
 		return "", err
 	}
@@ -162,9 +169,11 @@ func deployLibrary() (string, error) {
 	return result.String(), nil
 }
 
-func downloadFileToString(url string) (string, error) {
-	// Send an HTTP GET request to the URL
-	response, err := http.Get(url) //nolint:gosec
+func downloadFileToString(url string, timeout time.Duration) (string, error) {
+	client := &http.Client{
+		Timeout: timeout,
+	}
+	response, err := client.Get(url) //nolint:gosec
 	if err != nil {
 		return "", err // Return an empty string and the error if the request fails
 	}
@@ -184,6 +193,14 @@ func downloadFileToString(url string) (string, error) {
 	// Convert the byte slice to a string
 	bodyString := string(bodyBytes)
 	return bodyString, nil
+}
+
+func writeOutput(content string, outputFile string) error {
+	if outputFile != "" {
+		return os.WriteFile(outputFile, []byte(content), 0644)
+	}
+	fmt.Print(content)
+	return nil
 }
 
 func isValidK8sObjectName(name string) error {
