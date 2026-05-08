@@ -226,7 +226,7 @@ func getPolicyGetter(ctx context.Context, loadPoliciesFromFile []string, account
 //  2. Kubescape Cloud API (if accountID configured)
 //  3. ControlInput CRD in-cluster (if connected to cluster and CRD exists)
 //  4. Defaults from regolibrary GitHub releases
-func getConfigInputsGetter(ctx context.Context, ControlsInputs string, accountID string, downloadReleasedPolicy *getter.DownloadReleasedPolicy) getter.IControlsInputsGetter {
+func getConfigInputsGetter(ctx context.Context, ControlsInputs string, accountID string, downloadReleasedPolicy *getter.DownloadReleasedPolicy, useCRD bool) getter.IControlsInputsGetter {
 	if len(ControlsInputs) > 0 {
 		return getter.NewLoadPolicy([]string{ControlsInputs})
 	}
@@ -235,13 +235,15 @@ func getConfigInputsGetter(ctx context.Context, ControlsInputs string, accountID
 		return g
 	}
 
-	// Try to read control inputs from the ControlInput CRD in-cluster
-	if crdInputs, err := getter.NewCRDControlInputs(); err == nil {
-		if _, crdErr := crdInputs.GetControlsInputs(""); crdErr == nil {
-			logger.L().Ctx(ctx).Info("using ControlInput CRD for control configuration")
-			return crdInputs
+	// Try to read control inputs from the ControlInput CRD in-cluster (live cluster scans only)
+	if useCRD {
+		if crdInputs, err := getter.NewCRDControlInputs(); err == nil {
+			if _, crdErr := crdInputs.GetControlsInputs(""); crdErr == nil {
+				logger.L().Ctx(ctx).Info("using ControlInput CRD for control configuration")
+				return crdInputs
+			}
+			logger.L().Ctx(ctx).Debug("ControlInput CRD found but default resource not available, falling back")
 		}
-		logger.L().Ctx(ctx).Debug("ControlInput CRD found but default resource not available, falling back")
 	}
 
 	if downloadReleasedPolicy == nil {
