@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/kubescape/v3/core/cautils"
@@ -44,14 +45,21 @@ func GetVapHelperCmd() *cobra.Command {
 }
 
 func getDeployLibraryCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "deploy-library",
 		Short: "Install Kubescape CEL admission policy library",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return deployLibrary()
+			content, err := deployLibrary()
+			if err != nil {
+				return err
+			}
+			fmt.Print(content)
+			return nil
 		},
 	}
+
+	return cmd
 }
 
 func getCreatePolicyBindingCmd() *cobra.Command {
@@ -94,7 +102,12 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 				}
 			}
 
-			return createPolicyBinding(policyBindingName, policyName, action, parameterReference, namespaceArr, labelArr)
+			content, err := createPolicyBinding(policyBindingName, policyName, action, parameterReference, namespaceArr, labelArr)
+			if err != nil {
+				return err
+			}
+			fmt.Print(content)
+			return nil
 		},
 	}
 	// Must specify the name of the policy binding
@@ -112,39 +125,41 @@ func getCreatePolicyBindingCmd() *cobra.Command {
 
 // Implementation of the VAP helper commands
 // deploy-library
-func deployLibrary() error {
+func deployLibrary() (string, error) {
 	logger.L().Info("Downloading the Kubescape CEL admission policy library")
 	// Download the policy-configuration-definition.yaml from the latest release URL
 	policyConfigurationDefinitionURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/policy-configuration-definition.yaml"
 	policyConfigurationDefinition, err := downloadFileToString(policyConfigurationDefinitionURL)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Download the basic-control-configuration.yaml from the latest release URL
 	basicControlConfigurationURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/basic-control-configuration.yaml"
 	basicControlConfiguration, err := downloadFileToString(basicControlConfigurationURL)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Download the kubescape-validating-admission-policies.yaml from the latest release URL
 	kubescapeValidatingAdmissionPoliciesURL := "https://github.com/kubescape/cel-admission-library/releases/latest/download/kubescape-validating-admission-policies.yaml"
 	kubescapeValidatingAdmissionPolicies, err := downloadFileToString(kubescapeValidatingAdmissionPoliciesURL)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	logger.L().Info("Successfully downloaded admission policy library")
 
-	// Print the downloaded files to the STDOUT for the user to apply connecting them to a single YAML with ---
-	fmt.Println(policyConfigurationDefinition)
-	fmt.Println("---")
-	fmt.Println(basicControlConfiguration)
-	fmt.Println("---")
-	fmt.Println(kubescapeValidatingAdmissionPolicies)
+	// Concatenate the downloaded files into a single YAML document with --- separators
+	var result strings.Builder
+	result.WriteString(policyConfigurationDefinition)
+	result.WriteString("\n---\n")
+	result.WriteString(basicControlConfiguration)
+	result.WriteString("\n---\n")
+	result.WriteString(kubescapeValidatingAdmissionPolicies)
+	result.WriteString("\n")
 
-	return nil
+	return result.String(), nil
 }
 
 func downloadFileToString(url string) (string, error) {
@@ -188,11 +203,9 @@ func isValidK8sObjectName(name string) error {
 }
 
 // Create a policy binding
-func createPolicyBinding(bindingName string, policyName string, action string, paramRefName string, namespaceArr []string, labelMatch []string) error {
+func createPolicyBinding(bindingName string, policyName string, action string, paramRefName string, namespaceArr []string, labelMatch []string) (string, error) {
 	// Create a policy binding struct
 	policyBinding := &admissionv1.ValidatingAdmissionPolicyBinding{}
-	// Print the policy binding after marshalling it to YAML to the STDOUT
-	// The user can apply the output to the cluster
 	policyBinding.APIVersion = "admissionregistration.k8s.io/v1"
 	policyBinding.Name = bindingName
 	policyBinding.Kind = "ValidatingAdmissionPolicyBinding"
@@ -230,8 +243,7 @@ func createPolicyBinding(bindingName string, policyName string, action string, p
 	// Marshal the policy binding to YAML
 	out, err := yaml.Marshal(policyBinding)
 	if err != nil {
-		return err
+		return "", err
 	}
-	fmt.Println(string(out))
-	return nil
+	return string(out), nil
 }
