@@ -27,7 +27,7 @@ var scanCmdExamples = fmt.Sprintf(`
   %[1]s scan --format json --output results.json
 
   # Scan and save the results in multiple format in a single scan
-  %[1]s scan --format json,html,junit ---output result
+  %[1]s scan --format json,html,junit --output result
 
   # Display all resources
   %[1]s scan --verbose
