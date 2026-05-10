@@ -110,17 +110,27 @@ func getInterfaces(ctx context.Context, scanInfo *cautils.ScanInfo) componentInt
 
 func GetOutputPrinters(scanInfo *cautils.ScanInfo, ctx context.Context, clusterName string) []printer.IPrinter {
 	formats := scanInfo.Formats()
-
+	containPrettyPrinter := false
 	outputPrinters := make([]printer.IPrinter, 0)
 	for _, format := range formats {
-		if err := resultshandling.ValidatePrinter(scanInfo.ScanType, scanInfo.GetScanningContext(), format); err != nil {
+		invalidPrinter, err := resultshandling.ValidatePrinter(scanInfo.ScanType, scanInfo.GetScanningContext(), format)
+		if err != nil {
 			logger.L().Ctx(ctx).Fatal(err.Error())
+		}
+
+		if invalidPrinter && containPrettyPrinter {
+			continue
 		}
 
 		printerHandler := resultshandling.NewPrinter(ctx, format, scanInfo, clusterName)
 		printerHandler.SetWriter(ctx, scanInfo.Output)
 		outputPrinters = append(outputPrinters, printerHandler)
+
+		if invalidPrinter {
+			containPrettyPrinter = true
+		}
 	}
+
 	return outputPrinters
 }
 

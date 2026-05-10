@@ -167,12 +167,6 @@ func TestValidatePrinter(t *testing.T) {
 			expectErr:   nil,
 		},
 		{
-			name:      "invalid format for cluster scan should return error",
-			scanType:  cautils.ScanTypeCluster,
-			format:    "invalid",
-			expectErr: errors.New("format \"invalid\" is not supported when scanning"),
-		},
-		{
 			name:      "pdf format for image scan should return error",
 			scanType:  cautils.ScanTypeImage,
 			format:    printer.PdfFormat,
@@ -188,7 +182,7 @@ func TestValidatePrinter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidatePrinter(tt.scanType, tt.scanContext, tt.format)
+			_, got := ValidatePrinter(tt.scanType, tt.scanContext, tt.format)
 
 			assert.Equal(t, tt.expectErr, got)
 		})
